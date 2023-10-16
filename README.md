@@ -58,7 +58,7 @@ root@prometheus:/etc/arista-eos-exporter# bash initialization.sh
 Now you can use the systemd unit file provided from the extras/ folder. You need to have a look at the config file first. Otherwise the deamon will not come up right away.
 
 ```bash
-root@prometheus:/etc/arista-eos-exporter# cp extras/prometheus-arista-exporter.service /etc/systemd/system/prometheus-arista-exporter.service
+root@prometheus:/etc/arista-eos-exporter# cp extras/systemd/prometheus-arista-exporter.service /etc/systemd/system/prometheus-arista-exporter.service
 root@prometheus:/etc/arista-eos-exporter# systemctl daemon-reload
 root@prometheus:/etc/arista-eos-exporter# sudo systemctl enable prometheus prometheus-arista-exporter
 ```
