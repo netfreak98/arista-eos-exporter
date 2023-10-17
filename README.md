@@ -34,6 +34,7 @@ The optional parameter `modules` can have these values at the moment:
  * `transceiver` information about transceiver modules - transmit/receive power, alerts over thresholds, etc
  * `bgp` information about BGP peers, how many routes they advertise, their status
  * `power` information about PSU (power supply units) - status, model, capacity, fans, power, temperature
+ * `cpu` information about user, system and idle cpu usage
  * `all` all of the above. This is the default.
 
 ## Prerequisites and Installation

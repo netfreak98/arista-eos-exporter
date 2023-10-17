@@ -1,5 +1,3 @@
-
-
 from prometheus_client.core import GaugeMetricFamily, InfoMetricFamily
 import logging
 import os
@@ -126,10 +124,10 @@ class AristaMetricsCollector(object):
                 feature = entry["feature"]
                 used = entry["used"]
                 max_limit = entry["maxLimit"]
-                
+
                 labels = {"table": table, "chip": chip, "feature": feature}
                 logging.debug(f'Adding table={table} value={used} labels={labels}')
-                
+
                 used_metrics.add_sample("arista_tcam_used", value=used, labels=labels)
                 total_metrics.add_sample("arista_tcam_total", value=max_limit, labels=labels)
             except KeyError:
@@ -145,7 +143,7 @@ class AristaMetricsCollector(object):
             return
 
         self._interfaces = port_interfaces["result"][0].get("interfaces", {})
-        
+
         port_stats = {
             k: GaugeMetricFamily(
                 f"arista_port_{k}",
@@ -154,15 +152,15 @@ class AristaMetricsCollector(object):
             )
             for k in PORT_STATS_NAMES
         }
-        
+
         port_admin_up = GaugeMetricFamily(
             "arista_admin_up", "Value 1 if port is not shutdown", labels=["device", "description"]
         )
-        
+
         port_l2_up = GaugeMetricFamily(
             "arista_l2_up", "Value 1 if port is connected", labels=["device", "description"]
         )
-        
+
         port_bandwidth = GaugeMetricFamily(
             "arista_port_bandwidth", "Bandwidth in bits/s", labels=["device", "description"]
         )
@@ -268,7 +266,7 @@ class AristaMetricsCollector(object):
             for vrf, vrf_data in bgp_data.items():
                 peers = vrf_data.get("peers", {})
                 router_id = vrf_data["routerId"]
-                
+
                 for peer, peer_data in peers.items():
                     labels_info = {
                         "vrf": vrf,
@@ -345,6 +343,76 @@ class AristaMetricsCollector(object):
         yield psu_temp
         yield psu_fan
 
+    def collect_cpu(self):
+        data = self.switch_command("show processes top once")
+
+        # Time Info metrics
+        time_info = GaugeMetricFamily(
+            "arista_time_info",
+            "Time related metrics",
+            labels=["id"]
+        )
+
+        # Threads State Info metrics
+        threads_state_info = GaugeMetricFamily(
+            "arista_threads_state",
+            "Threads state metrics",
+            labels=["id"]
+        )
+
+        # CPU Info metrics
+        cpu_info = GaugeMetricFamily(
+            "arista_cpu",
+            "CPU usage metrics",
+            labels=["type"]
+        )
+
+        # Memory Info metrics
+        mem_info = GaugeMetricFamily(
+            "arista_memory_info",
+            "Memory information metrics",
+            labels=["type", "metric"]
+        )
+
+        # Process Info metrics
+        process_info = GaugeMetricFamily(
+            "arista_process_info",
+            "Process related metrics",
+            labels=["pid", "metric"]
+        )
+
+        result = data.get("result", [{}])[0]
+
+        # Extract Time Info metrics
+        for metric in ["currentTime", "upTime", "users"]:
+            time_info.add_metric(
+                [metric],
+                result["timeInfo"].get(metric, 0)
+            )
+
+        # Extract Threads State Info metrics
+        for state, value in result["threadsStateInfo"].items():
+            threads_state_info.add_metric([state], value)
+
+        # Extract CPU Info metrics
+        for ctype, value in result["cpuInfo"]["%Cpu(s)"].items():
+            cpu_info.add_metric([ctype], value)
+
+        # Extract Memory Info metrics
+        for mem_type in ["physicalMem", "swapMem"]:
+            for metric, value in result["memInfo"][mem_type].items():
+                mem_info.add_metric([mem_type, metric], value)
+
+        # Extract Process Info metrics
+        for pid, pinfo in result["processes"].items():
+            for metric in ["cpuPct", "memPct", "activeTime"]:
+                process_info.add_metric([pid, metric], pinfo.get(metric, 0))
+
+        yield time_info
+        yield threads_state_info
+        yield cpu_info
+        yield mem_info
+        yield process_info
 
     def get_all_modules(self):
         return {
@@ -354,16 +422,17 @@ class AristaMetricsCollector(object):
             "transceiver": self.collect_transceiver,
             "bgp": self.collect_bgp,
             "power": self.collect_power,
+            "cpu": self.collect_cpu,
         }
 
     def get_modules(self):
         all_modules = self.get_all_modules()
         if not self._module_names:
             return all_modules
-        
+
         modules = self._module_names.split(",")
         module_functions = {module: all_modules[module] for module in modules if module in all_modules or module == "all"}
-        
+
         if "all" in module_functions:
             return all_modules
 
