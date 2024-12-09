@@ -97,7 +97,7 @@ Oct 16 14:04:46 prometheus python3[35452]: 2023-10-16 14:04:46,929 35452 INFO co
 
 * The **listen_port** is providing the port on which the exporter is waiting to receive calls.
 
-* The **listen_addr** - address on which to listen. Defaults to 0.0.0.0
+* The **listen_addr** - address on which to listen. Defaults to `::`. You may provide one entry as a string or multiple entries as a list. If you provide hostname(s) rather than IPs, these are resolved to all valid IPv4 and IPv6 addresses first. Be careful with `localhost`, as this hostname may resolve to `127.0.0.1` or `::1` and `127.0.0.1`, depending on your `/etc/hosts` entries.
 
 * The credentials for login to the switches can either be added to the config.yaml file or passed via environment variables `ARISTA_USERNAME` and `ARISTA_PASSWORD`. The environment overwrites the settings in the config file
 

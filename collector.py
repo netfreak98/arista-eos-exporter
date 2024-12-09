@@ -1,17 +1,32 @@
-from prometheus_client.core import GaugeMetricFamily, InfoMetricFamily
+"""Arista metrics collector."""
+
 import logging
 import os
 import time
+
+from prometheus_client.core import GaugeMetricFamily, InfoMetricFamily
+
 import pyeapi
 
 PORT_STATS_NAMES = [
-    "inBroadcastPkts", "inDiscards", "inMulticastPkts", "inOctets",
-    "inUcastPkts", "outBroadcastPkts", "outDiscards", "outMulticastPkts",
-    "outOctets", "outUcastPkts"
+    "inBroadcastPkts",
+    "inDiscards",
+    "inMulticastPkts",
+    "inOctets",
+    "inUcastPkts",
+    "outBroadcastPkts",
+    "outDiscards",
+    "outMulticastPkts",
+    "outOctets",
+    "outUcastPkts",
 ]
 
+
 class AristaMetricsCollector(object):
+    """Main class of the collector."""
+
     def __init__(self, config, target):
+        """Initialize the collector."""
         self._username = os.getenv("ARISTA_USERNAME", config["username"])
         self._password = os.getenv("ARISTA_PASSWORD", config["password"])
         self._protocol = config.get("protocol", "https")
@@ -25,10 +40,12 @@ class AristaMetricsCollector(object):
         self._connection = False
         self._interfaces = False
         self._module_names = config.get("module_names")
-        self._scrape_durations = GaugeMetricFamily("arista_scrape_duration_seconds", "Duration of a collector scrape.")
-
+        self._scrape_durations = GaugeMetricFamily(
+            "arista_scrape_duration_seconds", "Duration of a collector scrape."
+        )
 
     def add_scrape_duration(self, module_name, duration):
+        """Add scrape duration metrics."""
         self._scrape_durations.add_sample(
             "arista_scrape_duration_seconds",
             value=duration,
@@ -36,6 +53,7 @@ class AristaMetricsCollector(object):
         )
 
     def get_connection(self):
+        """Get the Pyeapi connection object."""
         # set the default timeout
         logging.debug(f"Setting timeout to {self._timeout}")
         if not self._connection:
@@ -48,10 +66,11 @@ class AristaMetricsCollector(object):
                 timeout=self._timeout,
             )
             # workaround to allow sslv3 ciphers for python =>3.10
-            self._connection.transport._context.set_ciphers('DEFAULT')
+            self._connection.transport._context.set_ciphers("DEFAULT")
         return self._connection
 
     def switch_command(self, command):
+        """Run a switch command."""
         switch_result = ""
 
         connection = self.get_connection()
@@ -73,6 +92,7 @@ class AristaMetricsCollector(object):
             return switch_result
 
     def _get_labels(self):
+        """Get Prometheus labels."""
         start = time.time()
         # Get the switch info for the labels
         switch_info = self.switch_command("show version")
@@ -99,6 +119,7 @@ class AristaMetricsCollector(object):
         self._labels.update(labels_switch)
 
     def collect_memory(self):
+        """Collect memory data."""
         # Export the memory usage data
         yield GaugeMetricFamily(
             "arista_mem_total", "Total memory available", value=self._memtotal
@@ -108,14 +129,23 @@ class AristaMetricsCollector(object):
         )
 
     def collect_tcam(self):
+        """Collect TCAM data."""
         # Get the tcam usage data
         switch_tcam = self.switch_command("show hardware capacity")
 
-        if not switch_tcam or "result" not in switch_tcam or len(switch_tcam["result"]) == 0:
+        if (
+            not switch_tcam
+            or "result" not in switch_tcam
+            or len(switch_tcam["result"]) == 0
+        ):
             return
 
-        used_metrics = GaugeMetricFamily("arista_tcam_used", "TCAM Usage Data", labels=["table", "chip", "feature"])
-        total_metrics = GaugeMetricFamily("arista_tcam_total", "TCAM Capacity", labels=["table", "chip", "feature"])
+        used_metrics = GaugeMetricFamily(
+            "arista_tcam_used", "TCAM Usage Data", labels=["table", "chip", "feature"]
+        )
+        total_metrics = GaugeMetricFamily(
+            "arista_tcam_total", "TCAM Capacity", labels=["table", "chip", "feature"]
+        )
 
         for entry in switch_tcam["result"][0].get("tables", []):
             try:
@@ -126,10 +156,12 @@ class AristaMetricsCollector(object):
                 max_limit = entry["maxLimit"]
 
                 labels = {"table": table, "chip": chip, "feature": feature}
-                logging.debug(f'Adding table={table} value={used} labels={labels}')
+                logging.debug(f"Adding table={table} value={used} labels={labels}")
 
                 used_metrics.add_sample("arista_tcam_used", value=used, labels=labels)
-                total_metrics.add_sample("arista_tcam_total", value=max_limit, labels=labels)
+                total_metrics.add_sample(
+                    "arista_tcam_total", value=max_limit, labels=labels
+                )
             except KeyError:
                 logging.error("KeyError in switch_tcam entries")
                 continue
@@ -138,8 +170,13 @@ class AristaMetricsCollector(object):
         yield used_metrics
 
     def collect_port(self):
+        """Collect port data."""
         port_interfaces = self.switch_command("show interfaces")
-        if not port_interfaces or "result" not in port_interfaces or len(port_interfaces["result"]) == 0:
+        if (
+            not port_interfaces
+            or "result" not in port_interfaces
+            or len(port_interfaces["result"]) == 0
+        ):
             return
 
         self._interfaces = port_interfaces["result"][0].get("interfaces", {})
@@ -154,21 +191,29 @@ class AristaMetricsCollector(object):
         }
 
         port_admin_up = GaugeMetricFamily(
-            "arista_admin_up", "Value 1 if port is not shutdown", labels=["device", "description"]
+            "arista_admin_up",
+            "Value 1 if port is not shutdown",
+            labels=["device", "description"],
         )
 
         port_l2_up = GaugeMetricFamily(
-            "arista_l2_up", "Value 1 if port is connected", labels=["device", "description"]
+            "arista_l2_up",
+            "Value 1 if port is connected",
+            labels=["device", "description"],
         )
 
         port_bandwidth = GaugeMetricFamily(
-            "arista_port_bandwidth", "Bandwidth in bits/s", labels=["device", "description"]
+            "arista_port_bandwidth",
+            "Bandwidth in bits/s",
+            labels=["device", "description"],
         )
 
         for interface, iface in self._interfaces.items():
             data = iface.get("interfaceCounters")
             if not data:
-                logging.debug(f"Interface {interface} on {self._target} does not have interfaceCounters, skipping")
+                logging.debug(
+                    f"Interface {interface} on {self._target} does not have interfaceCounters, skipping"
+                )
                 continue
 
             labels = [iface["name"], iface["description"]]
@@ -178,11 +223,15 @@ class AristaMetricsCollector(object):
 
             port_admin_up.add_metric(labels=labels, value=port_admin_up_value)
             port_l2_up.add_metric(labels=labels, value=port_l2_up_value)
-            port_bandwidth.add_metric(labels=labels, value=int(iface.get("bandwidth", 0)))
+            port_bandwidth.add_metric(
+                labels=labels, value=int(iface.get("bandwidth", 0))
+            )
 
             metric_labels = labels + [iface["physicalAddress"], str(iface["mtu"])]
             for port_stat in PORT_STATS_NAMES:
-                port_stats[port_stat].add_metric(metric_labels, float(data.get(port_stat, 0)))
+                port_stats[port_stat].add_metric(
+                    metric_labels, float(data.get(port_stat, 0))
+                )
 
         yield from port_stats.values()
         yield port_admin_up
@@ -190,6 +239,7 @@ class AristaMetricsCollector(object):
         yield port_bandwidth
 
     def collect_transceiver(self):
+        """Collect transceiver data."""
         transceiver_data = self.switch_command("show interfaces transceiver detail")
         sensor_entries = ["rxPower", "txBias", "txPower", "voltage"]
 
@@ -199,10 +249,17 @@ class AristaMetricsCollector(object):
         transceiver_interfaces = transceiver_data["result"][0].get("interfaces", {})
 
         transceiver_labels = [
-            "device", "sensor", "mediaType", "serial", "description", "lane"
+            "device",
+            "sensor",
+            "mediaType",
+            "serial",
+            "description",
+            "lane",
         ]
         transceiver_stats_metrics = GaugeMetricFamily(
-            "arista_transceiver_stats", "transceiver Statistics", labels=transceiver_labels
+            "arista_transceiver_stats",
+            "transceiver Statistics",
+            labels=transceiver_labels,
         )
 
         alarm_labels = ["device", "lane", "sensor", "alarmType"]
@@ -221,19 +278,28 @@ class AristaMetricsCollector(object):
             # Lane detection.
             if iface not in self._interfaces:
                 try_iface = "/".join(iface.split("/")[0:-1]) + "/1"
-                if transceiver_interfaces.get(iface, {}).get("vendorSn") == transceiver_interfaces.get(try_iface, {}).get("vendorSn"):
+                if transceiver_interfaces.get(iface, {}).get(
+                    "vendorSn"
+                ) == transceiver_interfaces.get(try_iface, {}).get("vendorSn"):
                     lane = iface
                     iface = try_iface
                     logging.debug(f"Setting lane {lane} as part of {iface}")
 
             for sensor in sensor_entries:
                 labels = [
-                    iface, sensor, data["mediaType"], data["vendorSn"], description, lane
+                    iface,
+                    sensor,
+                    data["mediaType"],
+                    data["vendorSn"],
+                    description,
+                    lane,
                 ]
                 logging.debug(
                     f"Adding: interface={iface} sensor={sensor} value={data[sensor]} labels={labels}"
                 )
-                transceiver_stats_metrics.add_metric(value=float(data[sensor]), labels=labels)
+                transceiver_stats_metrics.add_metric(
+                    value=float(data[sensor]), labels=labels
+                )
 
                 # Check thresholds and generate alerts
                 thresholds = data["details"].get(sensor, {})
@@ -245,21 +311,35 @@ class AristaMetricsCollector(object):
                     ("lowAlarm", "lowAlarm"),
                     ("lowWarn", "lowWarn"),
                 ]:
-                    if alert_type in thresholds and data[sensor] > thresholds[alert_type]:
-                        transceiver_alarms.add_metric(labels=alert_labels + [boundary], value=data[sensor])
+                    if (
+                        alert_type in thresholds
+                        and data[sensor] > thresholds[alert_type]
+                    ):
+                        transceiver_alarms.add_metric(
+                            labels=alert_labels + [boundary], value=data[sensor]
+                        )
 
         yield transceiver_stats_metrics
         yield transceiver_alarms
 
     def collect_bgp(self):
-        ipv4_data = self.switch_command("show ip bgp summary")["result"][0]["vrfs"]
-        ipv6_data = self.switch_command("show ipv6 bgp summary")["result"][0]["vrfs"]
+        """Collect BGP data."""
+        ipv4_data = self.switch_command("show ip bgp summary vrf all")["result"][0][
+            "vrfs"
+        ]
+        ipv6_data = self.switch_command("show ipv6 bgp summary vrf all")["result"][0][
+            "vrfs"
+        ]
 
         prefixes = GaugeMetricFamily(
-            "arista_bgp_accepted_prefixes", "Number of prefixes accepted", labels=["vrf", "peer", "asn"]
+            "arista_bgp_accepted_prefixes",
+            "Number of prefixes accepted",
+            labels=["vrf", "peer", "asn"],
         )
         peer_state = InfoMetricFamily(
-            "arista_bgp_peer_state", "State of the BGP peer", labels=["vrf", "peer", "asn", "state", "router_id"]
+            "arista_bgp_peer_state",
+            "State of the BGP peer",
+            labels=["vrf", "peer", "asn", "state", "router_id"],
         )
 
         def process_bgp_data(bgp_data):
@@ -277,7 +357,9 @@ class AristaMetricsCollector(object):
                     }
                     peer_state.add_metric(value=labels_info, labels=labels_info)
                     labels_gauge = [vrf, peer, str(peer_data["asn"])]
-                    prefixes.add_metric(value=peer_data["prefixReceived"], labels=labels_gauge)
+                    prefixes.add_metric(
+                        value=peer_data["prefixReceived"], labels=labels_gauge
+                    )
 
         process_bgp_data(ipv4_data)
         process_bgp_data(ipv6_data)
@@ -286,6 +368,7 @@ class AristaMetricsCollector(object):
         yield prefixes
 
     def collect_power(self):
+        """Collect power data."""
         measurements = ["inputCurrent", "inputVoltage", "outputCurrent", "outputPower"]
         data = self.switch_command("show environment power")
 
@@ -344,51 +427,39 @@ class AristaMetricsCollector(object):
         yield psu_fan
 
     def collect_cpu(self):
+        """Collect CPU data."""
         data = self.switch_command("show processes top once")
 
         # Time Info metrics
         time_info = GaugeMetricFamily(
-            "arista_time_info",
-            "Time related metrics",
-            labels=["id"]
+            "arista_time_info", "Time related metrics", labels=["id"]
         )
 
         # Threads State Info metrics
         threads_state_info = GaugeMetricFamily(
-            "arista_threads_state",
-            "Threads state metrics",
-            labels=["id"]
+            "arista_threads_state", "Threads state metrics", labels=["id"]
         )
 
         # CPU Info metrics
-        cpu_info = GaugeMetricFamily(
-            "arista_cpu",
-            "CPU usage metrics",
-            labels=["type"]
-        )
+        cpu_info = GaugeMetricFamily("arista_cpu", "CPU usage metrics", labels=["type"])
 
         # Memory Info metrics
         mem_info = GaugeMetricFamily(
             "arista_memory_info",
             "Memory information metrics",
-            labels=["type", "metric"]
+            labels=["type", "metric"],
         )
 
         # Process Info metrics
         process_info = GaugeMetricFamily(
-            "arista_process_info",
-            "Process related metrics",
-            labels=["pid", "metric"]
+            "arista_process_info", "Process related metrics", labels=["pid", "metric"]
         )
 
         result = data.get("result", [{}])[0]
 
         # Extract Time Info metrics
         for metric in ["currentTime", "upTime", "users"]:
-            time_info.add_metric(
-                [metric],
-                result["timeInfo"].get(metric, 0)
-            )
+            time_info.add_metric([metric], result["timeInfo"].get(metric, 0))
 
         # Extract Threads State Info metrics
         for state, value in result["threadsStateInfo"].items():
@@ -415,6 +486,7 @@ class AristaMetricsCollector(object):
         yield process_info
 
     def get_all_modules(self):
+        """Get all supported modules."""
         return {
             "memory": self.collect_memory,
             "tcam": self.collect_tcam,
@@ -426,12 +498,17 @@ class AristaMetricsCollector(object):
         }
 
     def get_modules(self):
+        """Get modules."""
         all_modules = self.get_all_modules()
         if not self._module_names:
             return all_modules
 
         modules = self._module_names.split(",")
-        module_functions = {module: all_modules[module] for module in modules if module in all_modules or module == "all"}
+        module_functions = {
+            module: all_modules[module]
+            for module in modules
+            if module in all_modules or module == "all"
+        }
 
         if "all" in module_functions:
             return all_modules
@@ -443,6 +520,7 @@ class AristaMetricsCollector(object):
         return module_functions
 
     def collect(self):
+        """Collect the metrics."""
         self._get_labels()
         self._interfaces = False
         # Export the up and response metrics
