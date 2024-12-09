@@ -37,7 +37,7 @@ class MetricHandler:
             logging.debug("Invalid authorization header received")
             resp.status = falcon.HTTP_401
             resp.set_header("Authorization", "Basic credentials")
-            resp.text = "Unauthenticated"
+            resp.text = "Unauthorized"
             return False
 
         return True
