@@ -32,9 +32,9 @@ class MetricHandler:
             f"{web_username}:{web_password}".encode()
         ).decode()
         if auth_header and auth_header == f"Basic {auth_expected}":
-            logging.error("Authorization header received: ")
-            logging.error(req.get_header("Authorization"))
+            logging.debug("Valid authorization header received")
         else:
+            logging.debug("Invalid authorization header received")
             resp.status = falcon.HTTP_401
             resp.set_header("Authorization", "Basic credentials")
             resp.text = "Unauthenticated"
