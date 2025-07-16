@@ -1,0 +1,10 @@
+web_listen_port: 9200
+web_listen_address: ["127.0.0.1", "::1"]
+# web_username: 'sampleusername'
+# web_password: 'changeme'
+username: 'eapi'
+password: 'mytestPW'
+protocol: 'https'
+disable_certificate_validation: true
+loglevel: INFO
+timeout: 20
